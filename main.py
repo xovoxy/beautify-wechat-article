@@ -1,5 +1,6 @@
 import json
 import markdown
+from datetime import datetime
 from typing import List, Dict, Any
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
@@ -28,6 +29,13 @@ def convert_markdown_to_html(markdown_text: str) -> str:
     return html
 
 
+def is_wechat_url(url: str) -> bool:
+    """判断是否是微信公众号链接"""
+    if not url:
+        return False
+    return 'mp.weixin.qq.com' in url.lower()
+
+
 def generate_html_content(articles: List[Dict[str, Any]]) -> str:
     """生成微信公众号HTML内容片段"""
     html_parts = []
@@ -40,18 +48,44 @@ def generate_html_content(articles: List[Dict[str, Any]]) -> str:
         # 转换markdown摘要为HTML
         summary_html = convert_markdown_to_html(summary)
         
-        # 生成单个条目的HTML
+        # 根据链接类型决定显示方式
+        if is_wechat_url(url):
+            # 微信公众号链接，显示为可点击链接（柔和简洁的按钮样式）
+            url_display = f'<div style="margin-top: 18px;"><a href="{url}" target="_blank" style="display: inline-block; color: #7B8FA1; text-decoration: none; font-size: 14px; padding: 8px 18px; border-radius: 8px; font-weight: 400; box-shadow: 0 1px 3px rgba(107, 182, 255, 0.2);">查看原文 →</a></div>'
+        else:
+            # 非微信公众号链接，只显示原始链接文本
+            url_display = f'<div style="margin-top: 18px;"><span style="display: inline-block; color: #7B8FA1; font-size: 14px; background-color: #F0F4F8; padding: 8px 16px; border-radius: 8px;">[原文链接]: {url}</span></div>'
+        
+        # 生成单个条目的HTML（简约扁平化卡片设计）
+        # 使用循环颜色：蓝色、青色、橙色、紫色
+        colors = [
+            {'dot': '#4A90E2', 'title': '#2C5F8D', 'bg': '#E8F4FD'},
+            {'dot': '#00C9A7', 'title': '#008B6B', 'bg': '#E0F7F4'},
+            {'dot': '#FF8C42', 'title': '#CC6D35', 'bg': '#FFF4ED'},
+            {'dot': '#9B59B6', 'title': '#7D3C98', 'bg': '#F4E8F7'}
+        ]
+        color_scheme = colors[len(html_parts) % len(colors)]
+        
         article_html = f"""
-<div style="margin-bottom: 30px; padding: 20px; background-color: #f8f9fa; border-radius: 8px; border-left: 4px solid #007bff;">
-    <h2 style="margin: 0 0 15px 0; font-size: 20px; font-weight: bold; color: #333; line-height: 1.5;">
-        {title}
-    </h2>
-    <div style="margin-bottom: 15px; font-size: 16px; line-height: 1.8; color: #555;">
-        {summary_html}
-    </div>
-    <a href="{url}" target="_blank" style="display: inline-block; padding: 8px 16px; background-color: #007bff; color: #fff; text-decoration: none; border-radius: 4px; font-size: 14px; margin-top: 10px;">
-        查看原文 →
-    </a>
+<div style="margin: 25px auto; max-width: 600px; background-color: {color_scheme['bg']}; border-radius: 16px; padding: 25px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);">
+    <table width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse: collapse; border: none;">
+        <tr>
+            <!-- 左侧彩色圆点装饰 -->
+            <td width="30" valign="top" style="width: 30px; vertical-align: top; padding-top: 4px; border: none;">
+                <div style="width: 12px; height: 12px; background-color: {color_scheme['dot']}; border-radius: 50%; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);"></div>
+            </td>
+            <!-- 右侧内容区域 -->
+            <td valign="top" style="vertical-align: top; padding-left: 18px; border: none;">
+                <h3 style="color: {color_scheme['title']}; font-size: 22px; font-weight: 600; margin-top: 0; margin-bottom: 16px; line-height: 1.4;">
+                    {title}
+                </h3>
+                <div style="color: #4A5568; font-size: 15px; line-height: 1.75; margin-top: 0; margin-bottom: 0;">
+                    {summary_html}
+                </div>
+                {url_display}
+            </td>
+        </tr>
+    </table>
 </div>
 """
         html_parts.append(article_html)
@@ -59,10 +93,44 @@ def generate_html_content(articles: List[Dict[str, Any]]) -> str:
     # 合并所有条目
     html_content = ''.join(html_parts)
     
-    # 添加整体样式包装
+    # 获取当前日期
+    current_date = datetime.now().strftime('%m月%d日')
+    
+    # 添加装饰头部（简约扁平化风格）
+    header_decorator = f"""
+<div style="text-align: center; margin-bottom: 40px; padding: 30px 20px;">
+    <div style="display: inline-block; background: linear-gradient(135deg, #E8F4FD 0%, #E0F7F4 50%, #FFF4ED 100%); padding: 20px 40px; border-radius: 24px; box-shadow: 0 4px 16px rgba(74, 144, 226, 0.1);">
+        <h1 style="color: #2C5F8D; font-size: 28px; font-weight: 600; margin: 0; letter-spacing: 1px;">{current_date} · 新闻资讯</h1>
+        <div style="color: #7B8FA1; font-size: 14px; margin-top: 8px; font-weight: 400;">Daily AI News</div>
+    </div>
+</div>
+"""
+    
+    # 添加装饰尾部（简约扁平化风格）
+    footer_decorator = """
+<div style="margin-top: 50px; text-align: center; padding: 20px;">
+    <table width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse: collapse; border: none;">
+        <tr>
+            <td align="center" style="text-align: center; border: none;">
+                <table cellspacing="0" cellpadding="0" border="0" style="border-collapse: collapse; margin: 0 auto; border: none;">
+                    <tr>
+                        <td style="width: 40px; height: 2px; background: linear-gradient(90deg, transparent, #4A90E2, transparent); border: none;"></td>
+                        <td style="padding: 0 12px; color: #7B8FA1; font-size: 14px; font-weight: 400; white-space: nowrap; border: none;">END</td>
+                        <td style="width: 40px; height: 2px; background: linear-gradient(90deg, transparent, #4A90E2, transparent); border: none;"></td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</div>
+"""
+    
+    # 添加整体样式包装（清爽的浅色背景）
     final_html = f"""
-<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background-color: #fff;">
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', sans-serif; padding: 30px 20px; background: linear-gradient(180deg, #FAFBFC 0%, #F5F7FA 100%); min-height: 100vh;">
+{header_decorator}
 {html_content}
+{footer_decorator}
 </div>
 """
     
@@ -70,27 +138,27 @@ def generate_html_content(articles: List[Dict[str, Any]]) -> str:
 
 
 def apply_inline_styles(html: str) -> str:
-    """为HTML元素添加内联样式，确保微信公众号兼容性"""
+    """为HTML元素添加内联样式，确保微信公众号兼容性（简约扁平化风格）"""
     import re
     
     # 处理段落（只替换没有style属性的p标签）
-    html = re.sub(r'<p(?![^>]*style=)', '<p style="margin: 10px 0; line-height: 1.8;"', html)
+    html = re.sub(r'<p(?![^>]*style=)', '<p style="margin: 0 0 12px 0; line-height: 1.75; color: #4A5568;"', html)
     
     # 处理列表（只替换没有style属性的标签）
-    html = re.sub(r'<ul(?![^>]*style=)', '<ul style="margin: 10px 0; padding-left: 25px; line-height: 1.8;"', html)
-    html = re.sub(r'<ol(?![^>]*style=)', '<ol style="margin: 10px 0; padding-left: 25px; line-height: 1.8;"', html)
-    html = re.sub(r'<li(?![^>]*style=)', '<li style="margin: 5px 0;"', html)
+    html = re.sub(r'<ul(?![^>]*style=)', '<ul style="margin: 12px 0; padding-left: 24px; line-height: 1.75; color: #4A5568;"', html)
+    html = re.sub(r'<ol(?![^>]*style=)', '<ol style="margin: 12px 0; padding-left: 24px; line-height: 1.75; color: #4A5568;"', html)
+    html = re.sub(r'<li(?![^>]*style=)', '<li style="margin: 6px 0; color: #4A5568;"', html)
     
     # 处理粗体（只替换没有style属性的strong标签）
-    html = re.sub(r'<strong(?![^>]*style=)', '<strong style="font-weight: bold; color: #333;"', html)
+    html = re.sub(r'<strong(?![^>]*style=)', '<strong style="font-weight: 600; color: #2C5F8D;"', html)
     
-    # 处理引用块（只替换没有style属性的blockquote标签）
-    html = re.sub(r'<blockquote(?![^>]*style=)', '<blockquote style="margin: 15px 0; padding: 10px 15px; background-color: #f0f0f0; border-left: 4px solid #ccc; color: #666; font-style: italic;"', html)
+    # 处理引用块（只替换没有style属性的blockquote标签，扁平化风格）
+    html = re.sub(r'<blockquote(?![^>]*style=)', '<blockquote style="margin: 16px 0; padding: 16px 20px; background: linear-gradient(135deg, #E8F4FD 0%, #E0F7F4 100%); border-left: 4px solid #4A90E2; border-radius: 8px; color: #4A5568; font-style: normal;"', html)
     
     # 处理标题（只替换没有style属性的标题标签，因为summary中的markdown可能包含标题）
-    html = re.sub(r'<h1(?![^>]*style=)', '<h1 style="font-size: 24px; font-weight: bold; margin: 20px 0 15px 0; color: #333; line-height: 1.4;"', html)
-    html = re.sub(r'<h3(?![^>]*style=)', '<h3 style="font-size: 18px; font-weight: bold; margin: 15px 0 10px 0; color: #333; line-height: 1.4;"', html)
-    html = re.sub(r'<h4(?![^>]*style=)', '<h4 style="font-size: 16px; font-weight: bold; margin: 12px 0 8px 0; color: #333; line-height: 1.4;"', html)
+    html = re.sub(r'<h1(?![^>]*style=)', '<h1 style="font-size: 26px; font-weight: 600; margin: 24px 0 16px 0; color: #2C5F8D; line-height: 1.4;"', html)
+    html = re.sub(r'<h3(?![^>]*style=)', '<h3 style="font-size: 20px; font-weight: 600; margin: 20px 0 12px 0; color: #2C5F8D; line-height: 1.4;"', html)
+    html = re.sub(r'<h4(?![^>]*style=)', '<h4 style="font-size: 18px; font-weight: 600; margin: 16px 0 10px 0; color: #2C5F8D; line-height: 1.4;"', html)
     # 注意：h2标签在generate_html_content中已经有样式，这里不处理
     
     return html
