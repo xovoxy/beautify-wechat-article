@@ -16,6 +16,7 @@ class ArticleItem(BaseModel):
 
 class ConvertRequest(BaseModel):
     articles: List[ArticleItem] = Field(..., description="文章列表")
+    summary: str = Field(..., description="摘要")
 
 
 class ConvertResponse(BaseModel):
@@ -36,11 +37,59 @@ def is_wechat_url(url: str) -> bool:
     return 'mp.weixin.qq.com' in url.lower()
 
 
-def generate_html_content(articles: List[Dict[str, Any]]) -> str:
-    """生成微信公众号HTML内容片段"""
-    html_parts = []
+def generate_html_content(articles: List[Dict[str, Any]], summary: str = '') -> str:
+    """生成微信公众号HTML内容片段，使用ainews模板样式"""
+    # 获取当前日期
+    current_date = datetime.now().strftime('%m月%d日')
     
-    for article in articles:
+    # 生成头部（使用动态日期，保持模板样式）
+    header_section = f"""
+<section style="text-align:center;margin-bottom:unset;">
+    <section
+        style="border-width:3px;border-bottom-style:solid;border-color:rgb(0, 0, 34);padding:5px 25px;display:inline-block;box-sizing:border-box;margin-bottom:unset;">
+        <p style="letter-spacing:4px;"><strong><span style="font-size:20px;"><span leaf="">{current_date} · 新闻资讯</span></span></strong></p>
+    </section>
+    <p style="letter-spacing:0px;"><span style="font-size:20px;"><span leaf="">Daily AI News</span></span></p>
+    <section
+        style="margin-left:auto;margin-right:auto;width:60px;height:10px;background-color:rgb(67, 212, 201);margin-bottom:unset;overflow:hidden;line-height:0;">
+        <span leaf=""><br class="ProseMirror-trailingBreak"></span></section>
+</section>
+<p><span leaf=""><br class="ProseMirror-trailingBreak"></span></p>
+"""
+    
+    # 生成新闻概览部分（如果提供了summary）
+    overview_section = ''
+    if summary:
+        # summary 是纯文本，不需要 markdown 转换
+        overview_section = f"""
+<section style="margin-bottom:unset;">
+    <section style="vertical-align:top;margin-bottom:unset;">
+        <section style="margin-left:50px;margin-bottom:-20px;">
+            <p style="letter-spacing:3px;"><span leaf="">新闻概览</span></p>
+        </section>
+        <section
+            style="width:15px;height:15px;margin-right:auto;margin-left:10px;margin-bottom:3px;background-color:rgb(67, 212, 201);overflow:hidden;line-height:0;">
+            <span leaf=""><br class="ProseMirror-trailingBreak"></span></section>
+        <section style="width:233px;margin-right:auto;margin-bottom:unset;">
+            <section
+                style="width:235px;height:2px;margin-left:3px;margin-bottom:-16px;background-color:rgb(67, 212, 201);overflow:hidden;line-height:0;">
+                <span leaf=""><br class="ProseMirror-trailingBreak"></span></section>
+            <section
+                style="width:2px;height:85px;margin-left:34px;background-color:rgb(67, 212, 201);margin-bottom:unset;overflow:hidden;line-height:0;">
+                <span leaf=""><br class="ProseMirror-trailingBreak"></span></section>
+        </section>
+        <section
+            style="padding-left:50px;padding-right:20px;margin-top:-55px;font-size:18px;color:rgb(67, 212, 201);box-sizing:border-box;margin-bottom:unset;">
+            <div style="font-size:18px;color:rgb(67, 212, 201);">{summary}</div>
+        </section>
+    </section>
+</section>
+<p><span leaf=""><br class="ProseMirror-trailingBreak"></span></p>
+"""
+    
+    # 生成文章编号条目
+    article_sections = []
+    for index, article in enumerate(articles, start=1):
         title = article.get('title', '')
         summary = article.get('summary', '')
         url = article.get('url', '')
@@ -48,89 +97,83 @@ def generate_html_content(articles: List[Dict[str, Any]]) -> str:
         # 转换markdown摘要为HTML
         summary_html = convert_markdown_to_html(summary)
         
-        # 根据链接类型决定显示方式
-        if is_wechat_url(url):
-            # 微信公众号链接，显示为可点击链接（柔和简洁的按钮样式）
-            url_display = f'<div style="margin-top: 18px;"><a href="{url}" target="_blank" style="display: inline-block; color: #7B8FA1; text-decoration: none; font-size: 14px; padding: 8px 18px; border-radius: 8px; font-weight: 400; box-shadow: 0 1px 3px rgba(107, 182, 255, 0.2);">查看原文 →</a></div>'
+        # 生成URL显示部分
+        if url:
+            if is_wechat_url(url):
+                url_display = f'<p style="margin-top: 12px;"><a href="{url}" target="_blank" style="color: rgb(67, 212, 201); text-decoration: none; font-size: 14px;">查看原文 →</a></p>'
+            else:
+                url_display = f'<p style="margin-top: 12px;"><span style="color: rgb(136, 136, 136); font-size: 14px;">[原文链接]: {url}</span></p>'
         else:
-            # 非微信公众号链接，只显示原始链接文本
-            url_display = f'<div style="margin-top: 18px;"><span style="display: inline-block; color: #7B8FA1; font-size: 14px; background-color: #F0F4F8; padding: 8px 16px; border-radius: 8px;">[原文链接]: {url}</span></div>'
+            url_display = ''
         
-        # 生成单个条目的HTML（简约扁平化卡片设计）
-        # 使用循环颜色：蓝色、青色、橙色、紫色
-        colors = [
-            {'dot': '#4A90E2', 'title': '#2C5F8D', 'bg': '#E8F4FD'},
-            {'dot': '#00C9A7', 'title': '#008B6B', 'bg': '#E0F7F4'},
-            {'dot': '#FF8C42', 'title': '#CC6D35', 'bg': '#FFF4ED'},
-            {'dot': '#9B59B6', 'title': '#7D3C98', 'bg': '#F4E8F7'}
-        ]
-        color_scheme = colors[len(html_parts) % len(colors)]
-        
-        article_html = f"""
-<div style="margin: 25px auto; max-width: 600px; background-color: {color_scheme['bg']}; border-radius: 16px; padding: 25px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);">
-    <table width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse: collapse; border: none;">
-        <tr>
-            <!-- 左侧彩色圆点装饰 -->
-            <td width="30" valign="top" style="width: 30px; vertical-align: top; padding-top: 4px; border: none;">
-                <div style="width: 12px; height: 12px; background-color: {color_scheme['dot']}; border-radius: 50%; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);"></div>
-            </td>
-            <!-- 右侧内容区域 -->
-            <td valign="top" style="vertical-align: top; padding-left: 18px; border: none;">
-                <h3 style="color: {color_scheme['title']}; font-size: 22px; font-weight: 600; margin-top: 0; margin-bottom: 16px; line-height: 1.4;">
-                    {title}
-                </h3>
-                <div style="color: #4A5568; font-size: 15px; line-height: 1.75; margin-top: 0; margin-bottom: 0;">
-                    {summary_html}
-                </div>
-                {url_display}
-            </td>
-        </tr>
-    </table>
-</div>
+        # 生成编号条目（使用模板的旋转方块装饰样式）
+        article_section = f"""
+<section style="margin-bottom:unset;">
+    <section style="margin:10px;">
+        <section
+            style="display:inline-block;background-color:rgb(113, 232, 222);width:35px;height:35px;margin-bottom:unset;overflow:hidden;line-height:0;transform:rotate(45deg);-webkit-transform:rotate(45deg);-moz-transform:rotate(45deg);-ms-transform:rotate(45deg);-o-transform:rotate(45deg);">
+            <span leaf=""><br class="ProseMirror-trailingBreak"></span></section>
+        <section
+            style="background-color:rgb(113, 232, 222);margin-left:-10px;display:inline-block;width:30px;height:30px;margin-bottom:unset;overflow:hidden;line-height:0;transform:rotate(45deg);-webkit-transform:rotate(45deg);-moz-transform:rotate(45deg);-ms-transform:rotate(45deg);-o-transform:rotate(45deg);">
+            <span leaf=""><br class="ProseMirror-trailingBreak"></span></section>
+    </section>
+    <section
+        style="margin-left:20px;margin-top:-50px;margin-bottom:unset;transform:rotate(0deg);-webkit-transform:rotate(0deg);-moz-transform:rotate(0deg);-ms-transform:rotate(0deg);-o-transform:rotate(0deg);">
+        <p><strong><span style="font-size:18px;"><span leaf="">no.{index} &nbsp; {title}</span></span></strong></p>
+    </section>
+</section>
+<p><span leaf=""><br class="ProseMirror-trailingBreak"></span></p>
+<section style="margin-bottom:unset;">
+    <div style="font-size:15px;letter-spacing:2px;color:#333333;font-family:微软雅黑, Arial;">{summary_html}</div>
+{url_display}
+</section>
+<p><span leaf=""><br class="ProseMirror-trailingBreak"></span></p>
 """
-        html_parts.append(article_html)
+        article_sections.append(article_section)
     
-    # 合并所有条目
-    html_content = ''.join(html_parts)
-    
-    # 获取当前日期
-    current_date = datetime.now().strftime('%m月%d日')
-    
-    # 添加装饰头部（简约扁平化风格）
-    header_decorator = f"""
-<div style="text-align: center; margin-bottom: 40px; padding: 30px 20px;">
-    <div style="display: inline-block; background: linear-gradient(135deg, #E8F4FD 0%, #E0F7F4 50%, #FFF4ED 100%); padding: 20px 40px; border-radius: 24px; box-shadow: 0 4px 16px rgba(74, 144, 226, 0.1);">
-        <h1 style="color: #2C5F8D; font-size: 28px; font-weight: 600; margin: 0; letter-spacing: 1px;">{current_date} · 新闻资讯</h1>
-        <div style="color: #7B8FA1; font-size: 14px; margin-top: 8px; font-weight: 400;">Daily AI News</div>
-    </div>
-</div>
+    # 生成尾部（使用模板的end样式）
+    footer_section = """
+<section style="margin-bottom:unset;">
+    <section style="text-align:center;margin-bottom:unset;">
+        <section
+            style="display:inline-block;background-color:rgb(113, 232, 222);width:35px;height:35px;margin-bottom:unset;overflow:hidden;line-height:0;transform:rotate(45deg);-webkit-transform:rotate(45deg);-moz-transform:rotate(45deg);-ms-transform:rotate(45deg);-o-transform:rotate(45deg);">
+            <span leaf=""><br class="ProseMirror-trailingBreak"></span></section>
+        <section
+            style="background-color:rgb(113, 232, 222);margin-left:-10px;display:inline-block;width:30px;height:30px;margin-bottom:unset;overflow:hidden;line-height:0;transform:rotate(45deg);-webkit-transform:rotate(45deg);-moz-transform:rotate(45deg);-ms-transform:rotate(45deg);-o-transform:rotate(45deg);">
+            <span leaf=""><br class="ProseMirror-trailingBreak"></span></section>
+    </section>
+    <section
+        style="margin-top:-40px;margin-bottom:unset;transform:rotate(0deg);-webkit-transform:rotate(0deg);-moz-transform:rotate(0deg);-ms-transform:rotate(0deg);-o-transform:rotate(0deg);">
+        <p style="text-align:center;"><span
+                style="font-size:18px;color:#ffffff;"><strong><span
+                        leaf="">end</span></strong></span></p>
+    </section>
+</section>
+<p><span leaf=""><br class="ProseMirror-trailingBreak"></span></p>
 """
     
-    # 添加装饰尾部（简约扁平化风格）
-    footer_decorator = """
-<div style="margin-top: 50px; text-align: center; padding: 20px;">
-    <table width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse: collapse; border: none;">
-        <tr>
-            <td align="center" style="text-align: center; border: none;">
-                <table cellspacing="0" cellpadding="0" border="0" style="border-collapse: collapse; margin: 0 auto; border: none;">
-                    <tr>
-                        <td style="width: 40px; height: 2px; background: linear-gradient(90deg, transparent, #4A90E2, transparent); border: none;"></td>
-                        <td style="padding: 0 12px; color: #7B8FA1; font-size: 14px; font-weight: 400; white-space: nowrap; border: none;">END</td>
-                        <td style="width: 40px; height: 2px; background: linear-gradient(90deg, transparent, #4A90E2, transparent); border: none;"></td>
-                    </tr>
-                </table>
-            </td>
-        </tr>
-    </table>
-</div>
-"""
+    # 组合所有部分，使用模板的包装结构
+    content_html = header_section + overview_section + ''.join(article_sections) + footer_section
     
-    # 添加整体样式包装（清爽的浅色背景）
+    # 使用模板的完整包装结构
     final_html = f"""
-<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', sans-serif; padding: 30px 20px; background: linear-gradient(180deg, #FAFBFC 0%, #F5F7FA 100%); min-height: 100vh;">
-{header_decorator}
-{html_content}
-{footer_decorator}
+<div>
+    <div></div>
+    <div id="ueditor_0" class="mock-iframe">
+        <div class="mock-iframe-document">
+            <div class="mock-iframe-body">
+                <div spellcheck="false" lang="en" class="view rich_media_content autoTypeSetting24psection">
+                    <div contenteditable="true" translate="no" class="ProseMirror"
+                        style="padding: 0px 4px; min-height: 949px;">
+                        <section style="margin-bottom:unset;" data-pm-slice="0 0 []">
+{content_html}
+                        </section>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div></div>
 </div>
 """
     
@@ -169,7 +212,7 @@ async def convert_to_html(request: ConvertRequest):
     """API端点：接收JSON数据，返回生成的HTML字符串"""
     try:
         articles_data = [article.dict() for article in request.articles]
-        html_content = generate_html_content(articles_data)
+        html_content = generate_html_content(articles_data, summary=request.summary)
         # 应用内联样式
         html_content = apply_inline_styles(html_content)
         return ConvertResponse(html=html_content)
@@ -182,10 +225,18 @@ def main():
     try:
         # 读取date.txt文件
         with open('date.txt', 'r', encoding='utf-8') as f:
-            articles = json.load(f)
+            data = json.load(f)
+        
+        # 支持两种格式：直接是文章列表，或包含articles和summary的对象
+        if isinstance(data, list):
+            articles = data
+            summary = ''
+        else:
+            articles = data.get('articles', [])
+            summary = data.get('summary', '')
         
         # 生成HTML
-        html_content = generate_html_content(articles)
+        html_content = generate_html_content(articles, summary=summary)
         html_content = apply_inline_styles(html_content)
         
         # 直接输出到控制台
