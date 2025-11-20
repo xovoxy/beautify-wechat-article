@@ -12,6 +12,7 @@ class ArticleItem(BaseModel):
     title: str
     summary: str
     url: str
+    newstype: str  # 新闻类型 ai_news model ai_product
 
 
 class ConvertRequest(BaseModel):
@@ -39,6 +40,21 @@ def is_wechat_url(url: str) -> bool:
 
 def generate_html_content(articles: List[Dict[str, Any]], summary: str = '') -> str:
     """生成微信公众号HTML内容片段，使用ainews模板样式"""
+    # 类型标题映射
+    type_title_map = {
+        "ai_news": "新闻资讯",
+        "model": "模型资讯",
+        "ai_product": "AI产品资讯"
+    }
+    
+    # 按类型分组文章
+    articles_by_type = {}
+    for article in articles:
+        news_type = article.get('newstype', 'ai_news')
+        if news_type not in articles_by_type:
+            articles_by_type[news_type] = []
+        articles_by_type[news_type].append(article)
+    
     # 获取当前日期
     current_date = datetime.now().strftime('%m月%d日')
     
@@ -47,7 +63,7 @@ def generate_html_content(articles: List[Dict[str, Any]], summary: str = '') -> 
 <section style="text-align:center;margin-bottom:unset;">
     <section
         style="border-width:3px;border-bottom-style:solid;border-color:rgb(0, 0, 34);padding:5px 25px;display:inline-block;box-sizing:border-box;margin-bottom:unset;">
-        <p style="letter-spacing:4px;"><strong><span style="font-size:20px;"><span leaf="">{current_date} · 新闻资讯</span></span></strong></p>
+        <p style="letter-spacing:4px;"><strong><span style="font-size:20px;"><span leaf="">{current_date} · 每日资讯</span></span></strong></p>
     </section>
     <p style="letter-spacing:0px;"><span style="font-size:20px;"><span leaf="">Daily AI News</span></span></p>
     <section
@@ -87,27 +103,53 @@ def generate_html_content(articles: List[Dict[str, Any]], summary: str = '') -> 
 <p><span leaf=""><br class="ProseMirror-trailingBreak"></span></p>
 """
     
-    # 生成文章编号条目
-    article_sections = []
-    for index, article in enumerate(articles, start=1):
-        title = article.get('title', '')
-        summary = article.get('summary', '')
-        url = article.get('url', '')
+    # 按类型顺序生成分组内容
+    type_order = ["ai_news", "model", "ai_product"]
+    grouped_sections = []
+    global_index = 1  # 全局文章编号
+    
+    for news_type in type_order:
+        if news_type not in articles_by_type or len(articles_by_type[news_type]) == 0:
+            continue
         
-        # 转换markdown摘要为HTML
-        summary_html = convert_markdown_to_html(summary)
+        type_title = type_title_map.get(news_type, news_type)
+        type_articles = articles_by_type[news_type]
         
-        # 生成URL显示部分
-        if url:
-            if is_wechat_url(url):
-                url_display = f'<p style="margin-top: 12px;"><a href="{url}" target="_blank" style="color: rgb(67, 212, 201); text-decoration: none; font-size: 14px;">查看原文 →</a></p>'
+        # 生成类型分组标题
+        type_header_section = f"""
+<section style="text-align:center;margin-bottom:unset;">
+    <section
+        style="border-width:3px;border-bottom-style:solid;border-color:rgb(0, 0, 34);padding:5px 25px;display:inline-block;box-sizing:border-box;margin-bottom:unset;">
+        <p style="letter-spacing:4px;"><strong><span style="font-size:20px;"><span leaf="">{type_title}</span></span></strong></p>
+    </section>
+    <section
+        style="margin-left:auto;margin-right:auto;width:60px;height:10px;background-color:rgb(67, 212, 201);margin-bottom:unset;overflow:hidden;line-height:0;">
+        <span leaf=""><br class="ProseMirror-trailingBreak"></span></section>
+</section>
+<p><span leaf=""><br class="ProseMirror-trailingBreak"></span></p>
+"""
+        grouped_sections.append(type_header_section)
+        
+        # 生成该类型下的文章列表
+        for article in type_articles:
+            title = article.get('title', '')
+            article_summary = article.get('summary', '')
+            url = article.get('url', '')
+            
+            # 转换markdown摘要为HTML
+            summary_html = convert_markdown_to_html(article_summary)
+            
+            # 生成URL显示部分
+            if url:
+                if is_wechat_url(url):
+                    url_display = f'<p style="margin-top: 12px;"><a href="{url}" target="_blank" style="color: rgb(67, 212, 201); text-decoration: none; font-size: 14px;">查看原文 →</a></p>'
+                else:
+                    url_display = f'<p style="margin-top: 12px;"><span style="color: rgb(136, 136, 136); font-size: 14px;">[原文链接]: {url}</span></p>'
             else:
-                url_display = f'<p style="margin-top: 12px;"><span style="color: rgb(136, 136, 136); font-size: 14px;">[原文链接]: {url}</span></p>'
-        else:
-            url_display = ''
-        
-        # 生成编号条目（使用模板的旋转方块装饰样式）
-        article_section = f"""
+                url_display = ''
+            
+            # 生成编号条目（使用模板的旋转方块装饰样式）
+            article_section = f"""
 <section style="margin-bottom:unset;">
     <section style="margin:10px;">
         <section
@@ -119,7 +161,7 @@ def generate_html_content(articles: List[Dict[str, Any]], summary: str = '') -> 
     </section>
     <section
         style="margin-left:20px;margin-top:-50px;margin-bottom:unset;transform:rotate(0deg);-webkit-transform:rotate(0deg);-moz-transform:rotate(0deg);-ms-transform:rotate(0deg);-o-transform:rotate(0deg);">
-        <p><strong><span style="font-size:18px;"><span leaf="">no.{index} &nbsp; {title}</span></span></strong></p>
+        <p><strong><span style="font-size:18px;"><span leaf="">no.{global_index} &nbsp; {title}</span></span></strong></p>
     </section>
 </section>
 <p><span leaf=""><br class="ProseMirror-trailingBreak"></span></p>
@@ -129,7 +171,8 @@ def generate_html_content(articles: List[Dict[str, Any]], summary: str = '') -> 
 </section>
 <p><span leaf=""><br class="ProseMirror-trailingBreak"></span></p>
 """
-        article_sections.append(article_section)
+            grouped_sections.append(article_section)
+            global_index += 1
     
     # 生成尾部（使用模板的end样式）
     footer_section = """
@@ -153,7 +196,7 @@ def generate_html_content(articles: List[Dict[str, Any]], summary: str = '') -> 
 """
     
     # 组合所有部分，使用模板的包装结构
-    content_html = header_section + overview_section + ''.join(article_sections) + footer_section
+    content_html = header_section + overview_section + ''.join(grouped_sections) + footer_section
     
     # 使用模板的完整包装结构
     final_html = f"""
