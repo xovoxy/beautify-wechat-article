@@ -106,7 +106,6 @@ def generate_html_content(articles: List[Dict[str, Any]], summary: str = '') -> 
     # 按类型顺序生成分组内容
     type_order = ["ai_news", "model", "ai_product"]
     grouped_sections = []
-    global_index = 1  # 全局文章编号
     
     for news_type in type_order:
         if news_type not in articles_by_type or len(articles_by_type[news_type]) == 0:
@@ -114,6 +113,7 @@ def generate_html_content(articles: List[Dict[str, Any]], summary: str = '') -> 
         
         type_title = type_title_map.get(news_type, news_type)
         type_articles = articles_by_type[news_type]
+        type_index = 1  # 该类型的文章编号，从1开始
         
         # 生成类型分组标题
         type_header_section = f"""
@@ -161,7 +161,7 @@ def generate_html_content(articles: List[Dict[str, Any]], summary: str = '') -> 
     </section>
     <section
         style="margin-left:20px;margin-top:-50px;margin-bottom:unset;transform:rotate(0deg);-webkit-transform:rotate(0deg);-moz-transform:rotate(0deg);-ms-transform:rotate(0deg);-o-transform:rotate(0deg);">
-        <p><strong><span style="font-size:18px;"><span leaf="">no.{global_index} &nbsp; {title}</span></span></strong></p>
+        <p><strong><span style="font-size:18px;"><span leaf="">no.{type_index} &nbsp; {title}</span></span></strong></p>
     </section>
 </section>
 <p><span leaf=""><br class="ProseMirror-trailingBreak"></span></p>
@@ -172,7 +172,7 @@ def generate_html_content(articles: List[Dict[str, Any]], summary: str = '') -> 
 <p><span leaf=""><br class="ProseMirror-trailingBreak"></span></p>
 """
             grouped_sections.append(article_section)
-            global_index += 1
+            type_index += 1
     
     # 生成尾部（使用模板的end样式）
     footer_section = """
