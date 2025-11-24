@@ -1,6 +1,7 @@
 import json
 import markdown
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from typing import List, Dict, Any
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
@@ -55,8 +56,8 @@ def generate_html_content(articles: List[Dict[str, Any]], summary: str = '') -> 
             articles_by_type[news_type] = []
         articles_by_type[news_type].append(article)
     
-    # 获取当前日期
-    current_date = datetime.now().strftime('%m月%d日')
+    # 获取当前日期（使用上海时区）
+    current_date = datetime.now(ZoneInfo('Asia/Shanghai')).strftime('%m月%d日')
     
     # 生成头部（使用动态日期，保持模板样式）
     header_section = f"""
